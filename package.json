@@ -1,0 +1,41 @@
+{
+  "name": "emojico",
+  "version": "0.0.2",
+  "description": "CLI tool to convert emoji to favicon assets",
+  "main": "dist/index.js",
+  "bin": {
+    "emojico": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "prepare": "npm run build",
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "keywords": [
+    "emoji",
+    "favicon",
+    "cli"
+  ],
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "author": "Sunil Pai <threepointone@gmail.com>",
+  "license": "ISC",
+  "dependencies": {
+    "commander": "^11.1.0",
+    "puppeteer": "^24.0.0",
+    "sharp": "^0.33.5",
+    "to-ico": "^1.1.5"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.11",
+    "@types/node": "^22.10.5",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.7.3"
+  }
+}
