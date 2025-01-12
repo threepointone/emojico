@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { Command } from "commander";
 import * as fs from "fs";
 import * as path from "path";
 import puppeteer from "puppeteer";
@@ -11,6 +10,52 @@ const SIZES = {
   favicon: [16, 32, 48],
   apple: [57, 60, 72, 76, 114, 120, 144, 152, 180],
 };
+
+function printHelp() {
+  console.log(`
+emojico - Convert emoji to favicon and Apple touch icon assets
+
+Usage: emojico <emoji> --out <directory>
+
+Options:
+  --out, -o <directory>  Output directory for the generated assets
+  --help, -h             Show this help message
+
+Example:
+  emojico 🍎 --out ./icons
+`);
+  process.exit(0);
+}
+
+function parseArgs() {
+  const args = process.argv.slice(2);
+
+  if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
+    printHelp();
+  }
+
+  let emoji = "";
+  let outDir = "";
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--out" || args[i] === "-o") {
+      if (i + 1 < args.length) {
+        outDir = args[i + 1];
+        i++; // Skip next argument
+      }
+    } else if (!emoji && !args[i].startsWith("-")) {
+      emoji = args[i];
+    }
+  }
+
+  if (!emoji || !outDir) {
+    console.error("Error: Both emoji and output directory are required");
+    console.error("Run with --help for usage information");
+    process.exit(1);
+  }
+
+  return { emoji, outDir };
+}
 
 async function emojiToImage(emoji: string, size: number): Promise<Buffer> {
   const browser = await puppeteer.launch({ headless: true });
@@ -133,18 +178,9 @@ Add this to your HTML <head> section:
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon/apple-touch-icon-180x180.png">`);
 }
 
-const program = new Command();
-
-program
-  .name("emojico")
-  .description("CLI to convert emoji to favicon and Apple touch icon assets")
-  .argument("<emoji>", "emoji to convert")
-  .requiredOption(
-    "-o, --out <dir>",
-    "output directory for the generated assets"
-  )
-  .action((emoji, options) => {
-    generateFavicons(emoji, options.out).catch(console.error);
-  });
-
-program.parse();
+// Parse arguments and run
+const { emoji, outDir } = parseArgs();
+generateFavicons(emoji, outDir).catch((error) => {
+  console.error("Error:", error.message);
+  process.exit(1);
+});
