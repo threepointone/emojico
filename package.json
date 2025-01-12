@@ -4,11 +4,11 @@
   "description": "CLI tool to convert emoji to favicon assets",
   "main": "dist/index.js",
   "bin": {
-    "emojico": "./dist/index.js"
+    "emojico": "dist/index.js"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/threepointone/emojico.git"
+    "url": "git+https://github.com/threepointone/emojico.git"
   },
   "scripts": {
     "build": "tsc",
