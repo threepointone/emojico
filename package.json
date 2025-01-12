@@ -6,6 +6,10 @@
   "bin": {
     "emojico": "./dist/index.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/threepointone/emojico.git"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
