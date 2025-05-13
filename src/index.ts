@@ -15,14 +15,16 @@ function printHelp() {
   console.log(`
 emojico - Convert emoji to favicon and Apple touch icon assets
 
-Usage: emojico <emoji> --out <directory>
+Usage: emojico <emoji> --out <directory> [--all]
 
 Options:
   --out, -o <directory>  Output directory for the generated assets
+  --all                  Generate all assets (favicon.ico, PNG favicons, and Apple touch icons)
   --help, -h             Show this help message
 
 Example:
   emojico 🍎 --out ./icons
+  emojico 🍎 --out ./icons --all
 `);
   process.exit(0);
 }
@@ -36,6 +38,7 @@ function parseArgs() {
 
   let emoji = "";
   let outDir = "";
+  let generateAll = false;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--out" || args[i] === "-o") {
@@ -43,6 +46,8 @@ function parseArgs() {
         outDir = args[i + 1];
         i++; // Skip next argument
       }
+    } else if (args[i] === "--all") {
+      generateAll = true;
     } else if (!emoji && !args[i].startsWith("-")) {
       emoji = args[i];
     }
@@ -54,7 +59,7 @@ function parseArgs() {
     process.exit(1);
   }
 
-  return { emoji, outDir };
+  return { emoji, outDir, generateAll };
 }
 
 async function emojiToImage(emoji: string, size: number): Promise<Buffer> {
@@ -110,43 +115,31 @@ async function emojiToImage(emoji: string, size: number): Promise<Buffer> {
   return resized;
 }
 
-async function generateFavicons(emoji: string, outDir: string) {
+async function generateFavicons(
+  emoji: string,
+  outDir: string,
+  generateAll: boolean
+) {
   // Create output directory if it doesn't exist
   if (!fs.existsSync(outDir)) {
     fs.mkdirSync(outDir, { recursive: true });
-  }
-
-  // Create subdirectories
-  const faviconDir = path.join(outDir, "favicons");
-  const appleDir = path.join(outDir, "apple-touch-icon");
-
-  if (!fs.existsSync(faviconDir)) {
-    fs.mkdirSync(faviconDir);
-  }
-  if (!fs.existsSync(appleDir)) {
-    fs.mkdirSync(appleDir);
   }
 
   // Generate favicon sizes
   const faviconBuffers = await Promise.all(
     SIZES.favicon.map(async (size) => {
       const buffer = await emojiToImage(emoji, size);
-      fs.writeFileSync(
-        path.join(faviconDir, `favicon-${size}x${size}.png`),
-        buffer
-      );
+      if (generateAll) {
+        const faviconDir = path.join(outDir, "favicons");
+        if (!fs.existsSync(faviconDir)) {
+          fs.mkdirSync(faviconDir);
+        }
+        fs.writeFileSync(
+          path.join(faviconDir, `favicon-${size}x${size}.png`),
+          buffer
+        );
+      }
       return buffer;
-    })
-  );
-
-  // Generate Apple touch icon sizes
-  await Promise.all(
-    SIZES.apple.map(async (size) => {
-      const buffer = await emojiToImage(emoji, size);
-      fs.writeFileSync(
-        path.join(appleDir, `apple-touch-icon-${size}x${size}.png`),
-        buffer
-      );
     })
   );
 
@@ -154,7 +147,25 @@ async function generateFavicons(emoji: string, outDir: string) {
   const icoBuffer = await toIco(faviconBuffers);
   fs.writeFileSync(path.join(outDir, "favicon.ico"), icoBuffer);
 
-  console.log(`✅ Generated all favicon and Apple touch icon assets in ${outDir}!
+  if (generateAll) {
+    // Create Apple touch icon directory
+    const appleDir = path.join(outDir, "apple-touch-icon");
+    if (!fs.existsSync(appleDir)) {
+      fs.mkdirSync(appleDir);
+    }
+
+    // Generate Apple touch icon sizes
+    await Promise.all(
+      SIZES.apple.map(async (size) => {
+        const buffer = await emojiToImage(emoji, size);
+        fs.writeFileSync(
+          path.join(appleDir, `apple-touch-icon-${size}x${size}.png`),
+          buffer
+        );
+      })
+    );
+
+    console.log(`✅ Generated all favicon and Apple touch icon assets in ${outDir}!
 
 Add this to your HTML <head> section:
 
@@ -176,11 +187,19 @@ Add this to your HTML <head> section:
 <link rel="apple-touch-icon" sizes="144x144" href="/apple-touch-icon/apple-touch-icon-144x144.png">
 <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon/apple-touch-icon-152x152.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon/apple-touch-icon-180x180.png">`);
+  } else {
+    console.log(`✅ Generated favicon.ico in ${outDir}!
+
+Add this to your HTML <head> section:
+
+<!-- Standard favicon -->
+<link rel="icon" type="image/x-icon" href="/favicon.ico">`);
+  }
 }
 
 // Parse arguments and run
-const { emoji, outDir } = parseArgs();
-generateFavicons(emoji, outDir).catch((error) => {
+const { emoji, outDir, generateAll } = parseArgs();
+generateFavicons(emoji, outDir, generateAll).catch((error) => {
   console.error("Error:", error.message);
   process.exit(1);
 });
