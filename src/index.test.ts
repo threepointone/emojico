@@ -138,9 +138,75 @@ describe("emojico CLI", () => {
     }, 120000);
   });
 
-  it("should fail when no output directory is specified", () => {
-    expect(() => {
+  it("should use current directory as default when no output directory is specified", () => {
+    // Change to a temporary directory for this test
+    const originalCwd = process.cwd();
+    const tempDir = path.join(TEST_OUTPUT_DIR, "temp-cwd");
+    fs.mkdirSync(tempDir, { recursive: true });
+    process.chdir(tempDir);
+
+    try {
+      // Run the CLI without --out flag
       execSync(`node ${CLI_PATH} 🍎`);
+
+      // Check if favicon.ico was created in the current directory
+      expect(fs.existsSync(path.join(tempDir, "favicon.ico"))).toBe(true);
+
+      // Check that other directories are not created
+      expect(fs.existsSync(path.join(tempDir, "favicons"))).toBe(false);
+      expect(fs.existsSync(path.join(tempDir, "apple-touch-icon"))).toBe(false);
+    } finally {
+      // Restore original working directory
+      process.chdir(originalCwd);
+    }
+  }, 30000);
+
+  it("should use current directory as default with --all flag", () => {
+    // Change to a temporary directory for this test
+    const originalCwd = process.cwd();
+    const tempDir = path.join(TEST_OUTPUT_DIR, "temp-cwd-all");
+    fs.mkdirSync(tempDir, { recursive: true });
+    process.chdir(tempDir);
+
+    try {
+      // Run the CLI with --all flag but without --out flag
+      execSync(`node ${CLI_PATH} 🍎 --all`);
+
+      // Check if all files were created in the current directory
+      expect(fs.existsSync(path.join(tempDir, "favicon.ico"))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, "favicons"))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, "apple-touch-icon"))).toBe(true);
+
+      // Check that favicon PNG files exist
+      const faviconSizes = [16, 32, 48];
+      for (const size of faviconSizes) {
+        const filePath = path.join(
+          tempDir,
+          "favicons",
+          `favicon-${size}x${size}.png`
+        );
+        expect(fs.existsSync(filePath)).toBe(true);
+      }
+
+      // Check that Apple touch icon files exist
+      const appleSizes = [57, 60, 72, 76, 114, 120, 144, 152, 180];
+      for (const size of appleSizes) {
+        const filePath = path.join(
+          tempDir,
+          "apple-touch-icon",
+          `apple-touch-icon-${size}x${size}.png`
+        );
+        expect(fs.existsSync(filePath)).toBe(true);
+      }
+    } finally {
+      // Restore original working directory
+      process.chdir(originalCwd);
+    }
+  }, 30000);
+
+  it("should fail when no emoji is provided", () => {
+    expect(() => {
+      execSync(`node ${CLI_PATH} --out ${TEST_OUTPUT_DIR}`);
     }).toThrow();
   });
 });

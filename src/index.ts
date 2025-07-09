@@ -15,14 +15,15 @@ function printHelp() {
   console.log(`
 emojico - Convert emoji to favicon and Apple touch icon assets
 
-Usage: emojico <emoji> --out <directory> [--all]
+Usage: emojico <emoji> [--out <directory>] [--all]
 
 Options:
-  --out, -o <directory>  Output directory for the generated assets
+  --out, -o <directory>  Output directory for the generated assets (default: current directory)
   --all                  Generate all assets (favicon.ico, PNG favicons, and Apple touch icons)
   --help, -h             Show this help message
 
 Example:
+  emojico 🍎
   emojico 🍎 --out ./icons
   emojico 🍎 --out ./icons --all
 `);
@@ -37,7 +38,7 @@ function parseArgs() {
   }
 
   let emoji = "";
-  let outDir = "";
+  let outDir = "."; // Default to current directory
   let generateAll = false;
 
   for (let i = 0; i < args.length; i++) {
@@ -53,8 +54,8 @@ function parseArgs() {
     }
   }
 
-  if (!emoji || !outDir) {
-    console.error("Error: Both emoji and output directory are required");
+  if (!emoji) {
+    console.error("Error: Emoji is required");
     console.error("Run with --help for usage information");
     process.exit(1);
   }

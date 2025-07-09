@@ -17,25 +17,35 @@ A CLI tool that converts any emoji into a complete set of favicons and touch ico
 npm install -g emojico
 
 # Or use with npx
-npx emojico 🚀 --out ./icons
+npx emojico 🚀
 ```
 
 ## Usage
 
 ```bash
-emojico <emoji> --out <directory>
+emojico <emoji> [--out <directory>] [--all]
 ```
 
 ### Options
 
 - `<emoji>`: The emoji to convert (required)
-- `-o, --out <directory>`: Output directory for the generated assets (required)
+- `-o, --out <directory>`: Output directory for the generated assets (default: current directory)
+- `--all`: Generate all assets (favicon.ico, PNG favicons, and Apple touch icons)
 
 ### Example
 
 ```bash
-# Generate icons for an apple emoji
+# Generate favicon.ico in the current directory
+emojico 🍎
+
+# Generate all assets (favicon.ico + PNG favicons + Apple touch icons) in current directory
+emojico 🍎 --all
+
+# Generate icons for an apple emoji in a specific directory
 emojico 🍎 --out ./my-icons
+
+# Generate all assets in a specific directory
+emojico 🍎 --out ./my-icons --all
 
 # Generate rocket favicon
 emojico 🚀 --out ./rocket-icons
@@ -46,7 +56,16 @@ emojico 💡 --out ./assets/icons
 
 ## Output Structure
 
-The tool will create the following structure in your output directory:
+By default, the tool generates only `favicon.ico`. Use the `--all` flag to generate all assets.
+
+### Default Output (without --all)
+
+```
+output-directory/
+└── favicon.ico             # Multi-size ICO file (16x16, 32x32, 48x48)
+```
+
+### Complete Output (with --all)
 
 ```
 output-directory/
@@ -159,11 +178,6 @@ npm run build
 # Run tests
 npm test
 ```
-
-## Requirements
-
-- Node.js >= 14
-- Operating system with emoji support
 
 ## License
 
