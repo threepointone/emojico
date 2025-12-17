@@ -283,7 +283,12 @@ describe("ICO generation", () => {
       const sizes = [32, 48, 64];
 
       for (const size of sizes) {
-        const pngBuffer = createTestPng(size, size, { r: 0, g: 0, b: 0, alpha: 0 });
+        const pngBuffer = createTestPng(size, size, {
+          r: 0,
+          g: 0,
+          b: 0,
+          alpha: 0,
+        });
 
         const result = await parsePng(pngBuffer);
 
