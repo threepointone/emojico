@@ -6,6 +6,7 @@ A CLI tool that converts any emoji into a complete set of favicons and touch ico
 
 - 🖼️ Generates favicon.ico with multiple sizes (16x16, 32x32, 48x48)
 - 📱 Creates Apple Touch Icons in all standard sizes
+- 🌐 Generates Open Graph image (og:image) at 1200x630
 - ✨ High-quality emoji rendering
 - 🎯 Perfect for quick favicon generation
 - 📦 Works with any emoji
@@ -70,6 +71,7 @@ output-directory/
 ```
 output-directory/
 ├── favicon.ico             # Multi-size ICO file (16x16, 32x32, 48x48)
+├── og-image.png            # Open Graph image (1200x630)
 ├── favicons/
 │   ├── favicon-16x16.png
 │   ├── favicon-32x32.png
@@ -160,6 +162,9 @@ Add the following to your HTML `<head>` section:
   sizes="180x180"
   href="/apple-touch-icon/apple-touch-icon-180x180.png"
 />
+
+<!-- Open Graph Image -->
+<meta property="og:image" content="/og-image.png" />
 ```
 
 ## Development

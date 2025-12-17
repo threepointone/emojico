@@ -78,6 +78,10 @@ describe("emojico CLI", () => {
       expect(
         fs.existsSync(path.join(TEST_OUTPUT_DIR, "apple-touch-icon"))
       ).toBe(false);
+      // Check that og-image.png is not generated without --all
+      expect(fs.existsSync(path.join(TEST_OUTPUT_DIR, "og-image.png"))).toBe(
+        false
+      );
     }, 30000);
 
     it("should create output directory if it doesn't exist", () => {
@@ -143,6 +147,16 @@ describe("emojico CLI", () => {
         expect(metadata.width).toBe(size);
         expect(metadata.height).toBe(size);
       }
+
+      // Check Open Graph image
+      const ogImagePath = path.join(TEST_OUTPUT_DIR, "og-image.png");
+      expect(fs.existsSync(ogImagePath)).toBe(true);
+
+      // Verify og-image dimensions (1200x630)
+      const ogImageBuffer = fs.readFileSync(ogImagePath);
+      const ogMetadata = getPngMetadata(ogImageBuffer);
+      expect(ogMetadata.width).toBe(1200);
+      expect(ogMetadata.height).toBe(630);
     }, 30000);
 
     it("should handle different emoji inputs with --all flag", () => {
@@ -164,6 +178,10 @@ describe("emojico CLI", () => {
         expect(
           fs.existsSync(path.join(emojiOutputDir, "apple-touch-icon"))
         ).toBe(true);
+        // Check that og-image.png is generated for each emoji
+        expect(fs.existsSync(path.join(emojiOutputDir, "og-image.png"))).toBe(
+          true
+        );
       }
     }, 120000);
   });
@@ -185,6 +203,8 @@ describe("emojico CLI", () => {
       // Check that other directories are not created
       expect(fs.existsSync(path.join(tempDir, "favicons"))).toBe(false);
       expect(fs.existsSync(path.join(tempDir, "apple-touch-icon"))).toBe(false);
+      // Check that og-image.png is not generated without --all
+      expect(fs.existsSync(path.join(tempDir, "og-image.png"))).toBe(false);
     } finally {
       // Restore original working directory
       process.chdir(originalCwd);
@@ -228,6 +248,9 @@ describe("emojico CLI", () => {
         );
         expect(fs.existsSync(filePath)).toBe(true);
       }
+
+      // Check that og-image.png exists
+      expect(fs.existsSync(path.join(tempDir, "og-image.png"))).toBe(true);
     } finally {
       // Restore original working directory
       process.chdir(originalCwd);

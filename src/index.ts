@@ -20,7 +20,7 @@ Usage: emojico <emoji> [--out <directory>] [--all]
 
 Options:
   --out, -o <directory>  Output directory for the generated assets (default: current directory)
-  --all                  Generate all assets (favicon.ico, PNG favicons, and Apple touch icons)
+  --all                  Generate all assets (favicon.ico, PNG favicons, Apple touch icons, and og:image)
   --help, -h             Show this help message
 
 Example:
@@ -104,6 +104,35 @@ async function resizePng(
 
   // Draw scaled image centered on transparent background
   ctx.drawImage(image, x, y, width, height);
+  return canvas.toBuffer("image/png");
+}
+
+/**
+ * Generate Open Graph image (1200x630) with emoji centered on white background
+ * The emoji is rendered at a larger size (600px) for better visibility
+ */
+async function generateOgImage(emoji: string): Promise<Buffer> {
+  const OG_WIDTH = 1200;
+  const OG_HEIGHT = 630;
+  const EMOJI_SIZE = 600; // Larger emoji size for better visibility
+
+  // Render emoji at high resolution
+  const emojiBuffer = emojiToImageCanvas(emoji, EMOJI_SIZE);
+  const emojiImage = await loadImage(emojiBuffer);
+
+  // Create canvas with white background
+  const canvas = createCanvas(OG_WIDTH, OG_HEIGHT);
+  const ctx = canvas.getContext("2d");
+
+  // Fill with white background
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(0, 0, OG_WIDTH, OG_HEIGHT);
+
+  // Center the emoji
+  const x = (OG_WIDTH - EMOJI_SIZE) / 2;
+  const y = (OG_HEIGHT - EMOJI_SIZE) / 2;
+  ctx.drawImage(emojiImage, x, y, EMOJI_SIZE, EMOJI_SIZE);
+
   return canvas.toBuffer("image/png");
 }
 
@@ -355,6 +384,10 @@ async function generateFavicons(
       );
     });
 
+    // Generate Open Graph image
+    const ogImageBuffer = await generateOgImage(emoji);
+    fs.writeFileSync(path.join(outDir, "og-image.png"), ogImageBuffer);
+
     console.log(`✅ Generated all favicon and Apple touch icon assets in ${outDir}!
 
 Add this to your HTML <head> section:
@@ -376,7 +409,10 @@ Add this to your HTML <head> section:
 <link rel="apple-touch-icon" sizes="120x120" href="/apple-touch-icon/apple-touch-icon-120x120.png">
 <link rel="apple-touch-icon" sizes="144x144" href="/apple-touch-icon/apple-touch-icon-144x144.png">
 <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon/apple-touch-icon-152x152.png">
-<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon/apple-touch-icon-180x180.png">`);
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon/apple-touch-icon-180x180.png">
+
+<!-- Open Graph Image -->
+<meta property="og:image" content="/og-image.png">`);
   } else {
     console.log(`✅ Generated favicon.ico in ${outDir}!
 
