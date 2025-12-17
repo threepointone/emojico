@@ -2,9 +2,11 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import puppeteer from "puppeteer";
 import sharp from "sharp";
 import toIco from "to-ico";
+
+// Import canvas library
+import { createCanvas } from "@napi-rs/canvas";
 
 const SIZES = {
   favicon: [16, 32, 48],
@@ -63,57 +65,60 @@ function parseArgs() {
   return { emoji, outDir, generateAll };
 }
 
-async function emojiToImage(emoji: string, size: number): Promise<Buffer> {
-  const browser = await puppeteer.launch({ headless: true });
-  const page = await browser.newPage();
+/**
+ * Render emoji to image using Canvas
+ */
+function emojiToImageCanvas(emoji: string, size: number): Buffer {
+  const canvas = createCanvas(size, size);
+  const ctx = canvas.getContext("2d");
 
-  // Set viewport to be larger than needed to ensure high quality rendering
-  await page.setViewport({ width: 512, height: 512 });
+  // Set font with emoji support
+  const fontSize = Math.floor(size * 0.8);
+  ctx.font = `${fontSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "EmojiOne Color", sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
 
-  // Create an HTML page with the emoji
-  await page.setContent(`
-    <html>
-      <head>
-        <style>
-          body {
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background: transparent;
-          }
-          .emoji {
-            font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
-            font-size: 400px;
-            line-height: 1;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="emoji">${emoji}</div>
-      </body>
-    </html>
-  `);
+  // Draw emoji centered
+  ctx.fillText(emoji, size / 2, size / 2);
 
-  // Take a screenshot of the emoji
-  const element = await page.$(".emoji");
-  const screenshot = await element!.screenshot({
-    omitBackground: true,
+  return canvas.toBuffer("image/png");
+}
+
+/**
+ * Optimized: Render emoji once at high resolution, then resize to all sizes
+ * This is the fastest approach - one render, multiple fast resizes
+ */
+async function generateAllSizesOptimized(
+  emoji: string
+): Promise<Map<number, Buffer>> {
+  // Render once at high resolution (512x512 for best quality)
+  const HIGH_RES_SIZE = 512;
+  const highResBuffer = emojiToImageCanvas(emoji, HIGH_RES_SIZE);
+
+  // Get all sizes we need
+  const allSizes = [...SIZES.favicon, ...SIZES.apple];
+
+  // Resize to all sizes using Sharp (very fast)
+  const buffers = await Promise.all(
+    allSizes.map(async (size) => {
+      const buffer = await sharp(highResBuffer)
+        .resize(size, size, {
+          fit: "contain",
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
+        })
+        .png()
+        .toBuffer();
+      return { size, buffer };
+    })
+  );
+
+  // Return as Map for easy lookup
+  const sizeMap = new Map<number, Buffer>();
+  buffers.forEach(({ size, buffer }) => {
+    sizeMap.set(size, buffer);
   });
 
-  await browser.close();
-
-  // Resize the image to the desired size
-  const resized = await sharp(screenshot)
-    .resize(size, size, {
-      fit: "contain",
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    })
-    .png()
-    .toBuffer();
-
-  return resized;
+  return sizeMap;
 }
 
 async function generateFavicons(
@@ -126,23 +131,26 @@ async function generateFavicons(
     fs.mkdirSync(outDir, { recursive: true });
   }
 
-  // Generate favicon sizes
-  const faviconBuffers = await Promise.all(
-    SIZES.favicon.map(async (size) => {
-      const buffer = await emojiToImage(emoji, size);
-      if (generateAll) {
-        const faviconDir = path.join(outDir, "favicons");
-        if (!fs.existsSync(faviconDir)) {
-          fs.mkdirSync(faviconDir);
-        }
-        fs.writeFileSync(
-          path.join(faviconDir, `favicon-${size}x${size}.png`),
-          buffer
-        );
-      }
-      return buffer;
-    })
-  );
+  // Use optimized approach: render once, resize many
+  const sizeMap = await generateAllSizesOptimized(emoji);
+
+  // Get favicon buffers
+  const faviconBuffers = SIZES.favicon.map((size) => sizeMap.get(size)!);
+
+  // Save individual PNG favicons if --all flag is set
+  if (generateAll) {
+    const faviconDir = path.join(outDir, "favicons");
+    if (!fs.existsSync(faviconDir)) {
+      fs.mkdirSync(faviconDir, { recursive: true });
+    }
+    SIZES.favicon.forEach((size) => {
+      const buffer = sizeMap.get(size)!;
+      fs.writeFileSync(
+        path.join(faviconDir, `favicon-${size}x${size}.png`),
+        buffer
+      );
+    });
+  }
 
   // Generate favicon.ico with multiple sizes
   const icoBuffer = await toIco(faviconBuffers);
@@ -155,16 +163,14 @@ async function generateFavicons(
       fs.mkdirSync(appleDir);
     }
 
-    // Generate Apple touch icon sizes
-    await Promise.all(
-      SIZES.apple.map(async (size) => {
-        const buffer = await emojiToImage(emoji, size);
-        fs.writeFileSync(
-          path.join(appleDir, `apple-touch-icon-${size}x${size}.png`),
-          buffer
-        );
-      })
-    );
+    // Save Apple touch icons
+    SIZES.apple.forEach((size) => {
+      const buffer = sizeMap.get(size)!;
+      fs.writeFileSync(
+        path.join(appleDir, `apple-touch-icon-${size}x${size}.png`),
+        buffer
+      );
+    });
 
     console.log(`✅ Generated all favicon and Apple touch icon assets in ${outDir}!
 
