@@ -1,7 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
 import { execSync } from "child_process";
-import sharp from "sharp";
+import { PNG } from "pngjs";
+import { createCanvas } from "@napi-rs/canvas";
 import {
   parsePng,
   createIcoHeader,
@@ -17,6 +18,25 @@ const CLI_PATH = path.join(__dirname, "../dist/index.js");
 // Helper function to create a safe directory name from an emoji
 function getSafeDirName(emoji: string): string {
   return `emoji-${Buffer.from(emoji).toString("hex")}`;
+}
+
+// Helper function to create test PNG using Canvas
+function createTestPng(
+  width: number,
+  height: number,
+  color: { r: number; g: number; b: number; alpha: number }
+): Buffer {
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.alpha})`;
+  ctx.fillRect(0, 0, width, height);
+  return canvas.toBuffer("image/png");
+}
+
+// Helper function to get PNG metadata using pngjs
+function getPngMetadata(pngBuffer: Buffer): { width: number; height: number } {
+  const png = PNG.sync.read(pngBuffer);
+  return { width: png.width, height: png.height };
 }
 
 describe("emojico CLI", () => {
@@ -101,7 +121,8 @@ describe("emojico CLI", () => {
         expect(fs.existsSync(filePath)).toBe(true);
 
         // Verify image dimensions
-        const metadata = await sharp(filePath).metadata();
+        const fileBuffer = fs.readFileSync(filePath);
+        const metadata = getPngMetadata(fileBuffer);
         expect(metadata.width).toBe(size);
         expect(metadata.height).toBe(size);
       }
@@ -117,7 +138,8 @@ describe("emojico CLI", () => {
         expect(fs.existsSync(filePath)).toBe(true);
 
         // Verify image dimensions
-        const metadata = await sharp(filePath).metadata();
+        const fileBuffer = fs.readFileSync(filePath);
+        const metadata = getPngMetadata(fileBuffer);
         expect(metadata.width).toBe(size);
         expect(metadata.height).toBe(size);
       }
@@ -222,17 +244,8 @@ describe("emojico CLI", () => {
 describe("ICO generation", () => {
   describe("parsePng", () => {
     it("should parse a PNG buffer and extract image data", async () => {
-      // Create a simple 16x16 PNG using Sharp
-      const pngBuffer = await sharp({
-        create: {
-          width: 16,
-          height: 16,
-          channels: 4,
-          background: { r: 255, g: 0, b: 0, alpha: 1 },
-        },
-      })
-        .png()
-        .toBuffer();
+      // Create a simple 16x16 PNG using Canvas
+      const pngBuffer = createTestPng(16, 16, { r: 255, g: 0, b: 0, alpha: 1 });
 
       const result = await parsePng(pngBuffer);
 
@@ -247,16 +260,7 @@ describe("ICO generation", () => {
       const sizes = [32, 48, 64];
 
       for (const size of sizes) {
-        const pngBuffer = await sharp({
-          create: {
-            width: size,
-            height: size,
-            channels: 4,
-            background: { r: 0, g: 0, b: 0, alpha: 0 },
-          },
-        })
-          .png()
-          .toBuffer();
+        const pngBuffer = createTestPng(size, size, { r: 0, g: 0, b: 0, alpha: 0 });
 
         const result = await parsePng(pngBuffer);
 
@@ -386,27 +390,8 @@ describe("ICO generation", () => {
   describe("generateIco", () => {
     it("should generate a valid ICO file from PNG buffers", async () => {
       // Create test PNG buffers
-      const png16 = await sharp({
-        create: {
-          width: 16,
-          height: 16,
-          channels: 4,
-          background: { r: 255, g: 0, b: 0, alpha: 1 },
-        },
-      })
-        .png()
-        .toBuffer();
-
-      const png32 = await sharp({
-        create: {
-          width: 32,
-          height: 32,
-          channels: 4,
-          background: { r: 0, g: 255, b: 0, alpha: 1 },
-        },
-      })
-        .png()
-        .toBuffer();
+      const png16 = createTestPng(16, 16, { r: 255, g: 0, b: 0, alpha: 1 });
+      const png32 = createTestPng(32, 32, { r: 0, g: 255, b: 0, alpha: 1 });
 
       const icoBuffer = await generateIco([png16, png32]);
 
@@ -421,16 +406,7 @@ describe("ICO generation", () => {
     });
 
     it("should generate ICO with single image", async () => {
-      const png = await sharp({
-        create: {
-          width: 48,
-          height: 48,
-          channels: 4,
-          background: { r: 0, g: 0, b: 255, alpha: 1 },
-        },
-      })
-        .png()
-        .toBuffer();
+      const png = createTestPng(48, 48, { r: 0, g: 0, b: 255, alpha: 1 });
 
       const icoBuffer = await generateIco([png]);
 
@@ -440,19 +416,8 @@ describe("ICO generation", () => {
 
     it("should generate ICO with multiple sizes (favicon sizes)", async () => {
       const sizes = [16, 32, 48];
-      const pngBuffers = await Promise.all(
-        sizes.map((size) =>
-          sharp({
-            create: {
-              width: size,
-              height: size,
-              channels: 4,
-              background: { r: 128, g: 128, b: 128, alpha: 1 },
-            },
-          })
-            .png()
-            .toBuffer()
-        )
+      const pngBuffers = sizes.map((size) =>
+        createTestPng(size, size, { r: 128, g: 128, b: 128, alpha: 1 })
       );
 
       const icoBuffer = await generateIco(pngBuffers);
@@ -462,16 +427,7 @@ describe("ICO generation", () => {
     });
 
     it("should produce a file that can be read as ICO", async () => {
-      const png = await sharp({
-        create: {
-          width: 16,
-          height: 16,
-          channels: 4,
-          background: { r: 255, g: 255, b: 255, alpha: 1 },
-        },
-      })
-        .png()
-        .toBuffer();
+      const png = createTestPng(16, 16, { r: 255, g: 255, b: 255, alpha: 1 });
 
       const icoBuffer = await generateIco([png]);
 

@@ -2,10 +2,10 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import sharp from "sharp";
+import { PNG } from "pngjs";
 
 // Import canvas library
-import { createCanvas } from "@napi-rs/canvas";
+import { createCanvas, loadImage } from "@napi-rs/canvas";
 
 const SIZES = {
   favicon: [16, 32, 48],
@@ -84,6 +84,30 @@ function emojiToImageCanvas(emoji: string, size: number): Buffer {
 }
 
 /**
+ * Resize PNG buffer to target size using Canvas API
+ * Implements "fit: contain" behavior with transparent background
+ */
+async function resizePng(
+  pngBuffer: Buffer,
+  targetSize: number
+): Promise<Buffer> {
+  const image = await loadImage(pngBuffer);
+  const canvas = createCanvas(targetSize, targetSize);
+  const ctx = canvas.getContext("2d");
+
+  // Calculate scaling to fit (contain) - maintain aspect ratio
+  const scale = Math.min(targetSize / image.width, targetSize / image.height);
+  const width = image.width * scale;
+  const height = image.height * scale;
+  const x = (targetSize - width) / 2;
+  const y = (targetSize - height) / 2;
+
+  // Draw scaled image centered on transparent background
+  ctx.drawImage(image, x, y, width, height);
+  return canvas.toBuffer("image/png");
+}
+
+/**
  * Optimized: Render emoji once at high resolution, then resize to all sizes
  * This is the fastest approach - one render, multiple fast resizes
  */
@@ -97,16 +121,10 @@ async function generateAllSizesOptimized(
   // Get all sizes we need
   const allSizes = [...SIZES.favicon, ...SIZES.apple];
 
-  // Resize to all sizes using Sharp (very fast)
+  // Resize to all sizes using Canvas API
   const buffers = await Promise.all(
     allSizes.map(async (size) => {
-      const buffer = await sharp(highResBuffer)
-        .resize(size, size, {
-          fit: "contain",
-          background: { r: 0, g: 0, b: 0, alpha: 0 },
-        })
-        .png()
-        .toBuffer();
+      const buffer = await resizePng(highResBuffer, size);
       return { size, buffer };
     })
   );
@@ -121,7 +139,7 @@ async function generateAllSizesOptimized(
 }
 
 /**
- * Parse PNG buffer and extract image data using Sharp
+ * Parse PNG buffer and extract image data using pngjs
  */
 export async function parsePng(pngBuffer: Buffer): Promise<{
   width: number;
@@ -129,14 +147,13 @@ export async function parsePng(pngBuffer: Buffer): Promise<{
   bpp: number; // bytes per pixel (4 for RGBA)
   data: Buffer; // raw RGBA pixel data
 }> {
-  const metadata = await sharp(pngBuffer).metadata();
-  const raw = await sharp(pngBuffer).ensureAlpha().raw().toBuffer();
+  const png = PNG.sync.read(pngBuffer);
 
   return {
-    width: metadata.width!,
-    height: metadata.height!,
+    width: png.width,
+    height: png.height,
     bpp: 4, // RGBA = 4 bytes per pixel
-    data: raw,
+    data: png.data, // Already RGBA Buffer
   };
 }
 
@@ -239,7 +256,7 @@ export function convertRgbaToBgr(
 
 /**
  * Generate ICO file from array of PNG buffers
- * Based on to-ico implementation but using Sharp for PNG parsing
+ * Based on to-ico implementation but using pngjs for PNG parsing
  */
 export async function generateIco(pngBuffers: Buffer[]): Promise<Buffer> {
   // Parse all PNG buffers
