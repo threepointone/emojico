@@ -1,6 +1,6 @@
 {
   "name": "emojico",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "CLI tool to convert emoji to favicon assets",
   "main": "dist/index.js",
   "bin": {
