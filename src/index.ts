@@ -77,8 +77,14 @@ function emojiToImageCanvas(emoji: string, size: number): Buffer {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  // Draw emoji centered
-  ctx.fillText(emoji, size / 2, size / 2);
+  // Apply vertical centering adjustment
+  // Emoji fonts often have inconsistent baseline metrics, causing them to appear
+  // higher than expected. This offset compensates by shifting down slightly.
+  const verticalAdjustment = size * 0.08;
+  const yCoordinate = size / 2 + verticalAdjustment;
+
+  // Draw emoji with adjusted vertical position
+  ctx.fillText(emoji, size / 2, yCoordinate);
 
   return canvas.toBuffer("image/png");
 }
