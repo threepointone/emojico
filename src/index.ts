@@ -56,6 +56,9 @@ function parseArgs() {
       if (i + 1 < args.length) {
         outDir = args[i + 1];
         i++; // Skip next argument
+      } else {
+        console.error(`Error: ${args[i]} requires a directory argument.`);
+        process.exit(1);
       }
     } else if (args[i] === "--all") {
       generateAll = true;
@@ -252,7 +255,7 @@ export function getDirCompletions(input: string): string[] {
 
 function interactiveFolderPrompt(): Promise<string> {
   return new Promise((resolve) => {
-    let value = ".";
+    let value = "./";
     let completions = getDirCompletions(value);
     let selectedCompletion = 0;
     let prevLineCount = 0;
@@ -360,6 +363,9 @@ function interactiveFolderPrompt(): Promise<string> {
       }
 
       if (key >= " " && key <= "~") {
+        if (value === "." && key !== "/" && key !== ".") {
+          value = "./";
+        }
         value += key;
         selectedCompletion = 0;
         completions = getDirCompletions(value);

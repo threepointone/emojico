@@ -265,6 +265,102 @@ describe("emojico CLI", () => {
       execSync(`node ${CLI_PATH} --out ${TEST_OUTPUT_DIR}`);
     }).toThrow();
   });
+
+  describe("favicon.ico structure", () => {
+    it("should contain 3 embedded images (16, 32, 48)", () => {
+      const outDir = path.join(TEST_OUTPUT_DIR, "ico-structure");
+      execSync(`node ${CLI_PATH} 🍎 --out ${outDir}`);
+
+      const ico = fs.readFileSync(path.join(outDir, "favicon.ico"));
+      expect(ico.readUInt16LE(0)).toBe(0); // Reserved
+      expect(ico.readUInt16LE(2)).toBe(1); // Type: ICO
+      expect(ico.readUInt16LE(4)).toBe(3); // Count: 3 images
+
+      // Read directory entries (each 16 bytes, starting at offset 6)
+      const sizes = [];
+      for (let i = 0; i < 3; i++) {
+        const offset = 6 + i * 16;
+        const w = ico.readUInt8(offset);
+        sizes.push(w === 0 ? 256 : w);
+      }
+      expect(sizes.sort((a, b) => a - b)).toEqual([16, 32, 48]);
+    }, 30000);
+
+    it("should produce a non-trivial file size", () => {
+      const outDir = path.join(TEST_OUTPUT_DIR, "ico-size");
+      execSync(`node ${CLI_PATH} 🚀 --out ${outDir}`);
+
+      const stat = fs.statSync(path.join(outDir, "favicon.ico"));
+      expect(stat.size).toBeGreaterThan(1000);
+    }, 30000);
+  });
+
+  describe("multi-codepoint emoji", () => {
+    it("should handle ZWJ sequences", () => {
+      const outDir = path.join(TEST_OUTPUT_DIR, "zwj-test");
+      execSync(
+        `node ${CLI_PATH} $'\\U0001F468\\u200D\\U0001F469\\u200D\\U0001F467' --out ${outDir}`
+      );
+      expect(fs.existsSync(path.join(outDir, "favicon.ico"))).toBe(true);
+    }, 30000);
+
+    it("should handle flag emoji", () => {
+      const outDir = path.join(TEST_OUTPUT_DIR, "flag-test");
+      execSync(`node ${CLI_PATH} 🇺🇸 --out ${outDir}`);
+      expect(fs.existsSync(path.join(outDir, "favicon.ico"))).toBe(true);
+    }, 30000);
+
+    it("should handle skin tone modifier emoji", () => {
+      const outDir = path.join(TEST_OUTPUT_DIR, "skin-tone-test");
+      execSync(`node ${CLI_PATH} 👋🏽 --out ${outDir}`);
+      expect(fs.existsSync(path.join(outDir, "favicon.ico"))).toBe(true);
+    }, 30000);
+
+    it("should handle keycap emoji", () => {
+      const outDir = path.join(TEST_OUTPUT_DIR, "keycap-test");
+      execSync(`node ${CLI_PATH} '#️⃣' --out ${outDir}`);
+      expect(fs.existsSync(path.join(outDir, "favicon.ico"))).toBe(true);
+    }, 30000);
+  });
+
+  describe("CLI flag ordering", () => {
+    it("should accept --all before --out", () => {
+      const outDir = path.join(TEST_OUTPUT_DIR, "flag-order-1");
+      execSync(`node ${CLI_PATH} 🍎 --all --out ${outDir}`);
+      expect(fs.existsSync(path.join(outDir, "favicon.ico"))).toBe(true);
+      expect(fs.existsSync(path.join(outDir, "favicons"))).toBe(true);
+      expect(
+        fs.existsSync(path.join(outDir, "apple-touch-icon"))
+      ).toBe(true);
+    }, 30000);
+
+    it("should accept emoji after flags", () => {
+      const outDir = path.join(TEST_OUTPUT_DIR, "flag-order-2");
+      execSync(`node ${CLI_PATH} --out ${outDir} 🍎`);
+      expect(fs.existsSync(path.join(outDir, "favicon.ico"))).toBe(true);
+    }, 30000);
+
+    it("should accept -o with --all in any order", () => {
+      const outDir = path.join(TEST_OUTPUT_DIR, "flag-order-3");
+      execSync(`node ${CLI_PATH} --all -o ${outDir} 🍎`);
+      expect(fs.existsSync(path.join(outDir, "favicon.ico"))).toBe(true);
+      expect(fs.existsSync(path.join(outDir, "og-image.png"))).toBe(true);
+    }, 30000);
+  });
+
+  describe("error handling", () => {
+    it("should error when --out has no value", () => {
+      expect(() => {
+        execSync(`node ${CLI_PATH} 🍎 --out`, { encoding: "utf8" });
+      }).toThrow();
+    });
+
+    it("should error when -o has no value", () => {
+      expect(() => {
+        execSync(`node ${CLI_PATH} 🍎 -o`, { encoding: "utf8" });
+      }).toThrow();
+    });
+  });
 });
 
 describe("searchEmoji", () => {
