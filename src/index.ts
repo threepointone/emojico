@@ -471,19 +471,57 @@ function interactiveAllToggle(): Promise<boolean> {
 
 /**
  * Render emoji to image using Canvas
+ * Uses a two-pass approach: render first, then measure the actual visual
+ * bounding box of non-transparent pixels and shift to true center.
+ * This fixes vertical alignment issues where font metrics don't match
+ * the visual bounds of emoji glyphs.
  */
 function emojiToImageCanvas(emoji: string, size: number): Buffer {
-  const canvas = createCanvas(size, size);
-  const ctx = canvas.getContext("2d");
+  // First pass: render emoji with standard alignment
+  const tempCanvas = createCanvas(size, size);
+  const tempCtx = tempCanvas.getContext("2d");
 
   // Set font with emoji support
   const fontSize = Math.floor(size * 0.8);
-  ctx.font = `${fontSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "EmojiOne Color", sans-serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
+  tempCtx.font = `${fontSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "EmojiOne Color", sans-serif`;
+  tempCtx.textAlign = "center";
+  tempCtx.textBaseline = "middle";
 
-  // Draw emoji centered
-  ctx.fillText(emoji, size / 2, size / 2);
+  // Draw emoji centered (may not be visually centered due to font metrics)
+  tempCtx.fillText(emoji, size / 2, size / 2);
+
+  // Find the actual bounding box of non-transparent pixels
+  const imageData = tempCtx.getImageData(0, 0, size, size);
+  const pixels = imageData.data;
+  let top = size, bottom = 0, left = size, right = 0;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const alpha = pixels[(y * size + x) * 4 + 3];
+      if (alpha > 0) {
+        if (y < top) top = y;
+        if (y > bottom) bottom = y;
+        if (x < left) left = x;
+        if (x > right) right = x;
+      }
+    }
+  }
+
+  // If no visible pixels found or already centered, return as-is
+  if (top > bottom || left > right) {
+    return tempCanvas.toBuffer("image/png");
+  }
+
+  const offsetX = Math.round(size / 2 - (left + right) / 2);
+  const offsetY = Math.round(size / 2 - (top + bottom) / 2);
+
+  if (offsetX === 0 && offsetY === 0) {
+    return tempCanvas.toBuffer("image/png");
+  }
+
+  // Second pass: draw shifted onto a new canvas to visually center
+  const canvas = createCanvas(size, size);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(tempCanvas, offsetX, offsetY);
 
   return canvas.toBuffer("image/png");
 }

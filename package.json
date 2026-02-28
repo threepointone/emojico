@@ -11,7 +11,7 @@
     "url": "git+https://github.com/threepointone/emojico.git"
   },
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/index.js --external:@napi-rs/canvas --banner:js='#!/usr/bin/env node' --minify",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/index.js --external:@napi-rs/canvas --banner:js='#!/usr/bin/env node' --minify && chmod +x dist/index.js",
     "start": "node dist/index.js",
     "prepare": "npm run build",
     "test": "vitest run",
