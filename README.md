@@ -1,77 +1,80 @@
-# emojico 🎨
+# emojico
 
-A CLI tool that converts any emoji into a complete set of favicons and touch icons for your web projects.
-
-## Features
-
-- 🖼️ Generates favicon.ico with multiple sizes (16x16, 32x32, 48x48)
-- 📱 Creates Apple Touch Icons in all standard sizes
-- 🌐 Generates Open Graph image (og:image) at 1200x630
-- ✨ High-quality emoji rendering
-- 🎯 Perfect for quick favicon generation
-- 📦 Works with any emoji
-
-## Installation
+Emoji to favicon. One command.
 
 ```bash
-# Install globally
-npm install -g emojico
-
-# Or use with npx
-npx emojico 🚀
+npx emojico 🍎
 ```
 
-## Usage
+This generates a `favicon.ico` (with 16x16, 32x32, and 48x48 sizes) in the current directory.
+
+## Interactive mode
+
+Run without an argument to get a guided experience:
 
 ```bash
-emojico <emoji> [--out <directory>] [--all]
+npx emojico
 ```
 
-### Options
+**Step 1** — search and pick an emoji:
 
-- `<emoji>`: The emoji to convert (required)
-- `-o, --out <directory>`: Output directory for the generated assets (default: current directory)
-- `--all`: Generate all assets (favicon.ico, PNG favicons, and Apple touch icons)
+```
+  🔍 Search: cat
 
-### Example
+  ❯ 🐱  cat face
+    🐈  cat
+    🐈‍⬛  black cat
+    😸  grinning cat with smiling eyes
+    …
+
+  ↑/↓ navigate · enter select · esc quit
+```
+
+**Step 2** — choose an output folder (tab to autocomplete):
+
+```
+  📁 Output folder: .
+
+  ❯ ./src
+    ./dist
+    ./public
+
+  tab complete · ↑/↓ navigate · enter confirm · esc quit
+```
+
+**Step 3** — pick what to generate:
+
+```
+  📦 Generate all assets?
+
+  ❯ favicon.ico only
+    All assets (favicons, Apple touch icons, og:image)
+
+  ↑/↓ toggle · enter confirm · esc quit
+```
+
+## Options
 
 ```bash
-# Generate favicon.ico in the current directory
-emojico 🍎
-
-# Generate all assets (favicon.ico + PNG favicons + Apple touch icons) in current directory
-emojico 🍎 --all
-
-# Generate icons for an apple emoji in a specific directory
-emojico 🍎 --out ./my-icons
-
-# Generate all assets in a specific directory
-emojico 🍎 --out ./my-icons --all
-
-# Generate rocket favicon
-emojico 🚀 --out ./rocket-icons
-
-# Generate light bulb icons in a nested directory
-emojico 💡 --out ./assets/icons
+emojico [emoji] [--out <directory>] [--all]
 ```
 
-## Output Structure
+- **`--out, -o <directory>`** — output directory (default: `.`)
+- **`--all`** — generate the full asset set (see below)
+- **`--help, -h`** — show help
 
-By default, the tool generates only `favicon.ico`. Use the `--all` flag to generate all assets.
+## Full asset generation
 
-### Default Output (without --all)
+Pass `--all` to generate everything you need:
+
+```bash
+npx emojico 🚀 --out ./icons --all
+```
 
 ```
-output-directory/
-└── favicon.ico             # Multi-size ICO file (16x16, 32x32, 48x48)
-```
-
-### Complete Output (with --all)
-
-```
-output-directory/
-├── favicon.ico             # Multi-size ICO file (16x16, 32x32, 48x48)
-├── og-image.png            # Open Graph image (1200x630)
+icons/
+├── favicon.ico
+├── og-image.png                          # 1200x630
 ├── favicons/
 │   ├── favicon-16x16.png
 │   ├── favicon-32x32.png
@@ -88,106 +91,38 @@ output-directory/
     └── apple-touch-icon-180x180.png
 ```
 
-## HTML Usage
-
-Add the following to your HTML `<head>` section:
+Drop this into your `<head>`:
 
 ```html
-<!-- Standard favicon -->
 <link rel="icon" type="image/x-icon" href="/favicon.ico" />
 
-<!-- PNG favicon alternatives -->
-<link
-  rel="icon"
-  type="image/png"
-  sizes="16x16"
-  href="/favicons/favicon-16x16.png"
-/>
-<link
-  rel="icon"
-  type="image/png"
-  sizes="32x32"
-  href="/favicons/favicon-32x32.png"
-/>
-<link
-  rel="icon"
-  type="image/png"
-  sizes="48x48"
-  href="/favicons/favicon-48x48.png"
-/>
+<link rel="icon" type="image/png" sizes="16x16" href="/favicons/favicon-16x16.png" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicons/favicon-32x32.png" />
+<link rel="icon" type="image/png" sizes="48x48" href="/favicons/favicon-48x48.png" />
 
-<!-- Apple Touch Icons -->
-<link
-  rel="apple-touch-icon"
-  sizes="57x57"
-  href="/apple-touch-icon/apple-touch-icon-57x57.png"
-/>
-<link
-  rel="apple-touch-icon"
-  sizes="60x60"
-  href="/apple-touch-icon/apple-touch-icon-60x60.png"
-/>
-<link
-  rel="apple-touch-icon"
-  sizes="72x72"
-  href="/apple-touch-icon/apple-touch-icon-72x72.png"
-/>
-<link
-  rel="apple-touch-icon"
-  sizes="76x76"
-  href="/apple-touch-icon/apple-touch-icon-76x76.png"
-/>
-<link
-  rel="apple-touch-icon"
-  sizes="114x114"
-  href="/apple-touch-icon/apple-touch-icon-114x114.png"
-/>
-<link
-  rel="apple-touch-icon"
-  sizes="120x120"
-  href="/apple-touch-icon/apple-touch-icon-120x120.png"
-/>
-<link
-  rel="apple-touch-icon"
-  sizes="144x144"
-  href="/apple-touch-icon/apple-touch-icon-144x144.png"
-/>
-<link
-  rel="apple-touch-icon"
-  sizes="152x152"
-  href="/apple-touch-icon/apple-touch-icon-152x152.png"
-/>
-<link
-  rel="apple-touch-icon"
-  sizes="180x180"
-  href="/apple-touch-icon/apple-touch-icon-180x180.png"
-/>
+<link rel="apple-touch-icon" sizes="57x57" href="/apple-touch-icon/apple-touch-icon-57x57.png" />
+<link rel="apple-touch-icon" sizes="60x60" href="/apple-touch-icon/apple-touch-icon-60x60.png" />
+<link rel="apple-touch-icon" sizes="72x72" href="/apple-touch-icon/apple-touch-icon-72x72.png" />
+<link rel="apple-touch-icon" sizes="76x76" href="/apple-touch-icon/apple-touch-icon-76x76.png" />
+<link rel="apple-touch-icon" sizes="114x114" href="/apple-touch-icon/apple-touch-icon-114x114.png" />
+<link rel="apple-touch-icon" sizes="120x120" href="/apple-touch-icon/apple-touch-icon-120x120.png" />
+<link rel="apple-touch-icon" sizes="144x144" href="/apple-touch-icon/apple-touch-icon-144x144.png" />
+<link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon/apple-touch-icon-152x152.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon/apple-touch-icon-180x180.png" />
 
-<!-- Open Graph Image -->
 <meta property="og:image" content="/og-image.png" />
 ```
 
 ## Development
 
 ```bash
-# Clone the repository
 git clone https://github.com/threepointone/emojico.git
 cd emojico
-
-# Install dependencies
 npm install
-
-# Build the project
-npm run build
-
-# Run tests
+npm run build    # bundles with esbuild
 npm test
 ```
 
 ## License
 
 ISC
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.

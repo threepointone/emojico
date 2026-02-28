@@ -10,6 +10,9 @@ import {
   createBitmapInfoHeader,
   convertRgbaToBgr,
   generateIco,
+  searchEmoji,
+  getDirCompletions,
+  EmojiEntry,
 } from "./index";
 
 const TEST_OUTPUT_DIR = path.join(__dirname, "../test-output");
@@ -260,6 +263,268 @@ describe("emojico CLI", () => {
   it("should fail when no emoji is provided", () => {
     expect(() => {
       execSync(`node ${CLI_PATH} --out ${TEST_OUTPUT_DIR}`);
+    }).toThrow();
+  });
+});
+
+describe("searchEmoji", () => {
+  const makeEntry = (
+    emoji: string,
+    name: string
+  ): [string, EmojiEntry] => [
+    emoji,
+    {
+      name,
+      slug: name.replace(/\s+/g, "_"),
+      group: "Test",
+      emoji_version: "1.0",
+      unicode_version: "1.0",
+      skin_tone_support: false,
+    },
+  ];
+
+  const entries: Array<[string, EmojiEntry]> = [
+    makeEntry("\u{1F600}", "grinning face"),
+    makeEntry("\u{1F604}", "grinning face with smiling eyes"),
+    makeEntry("\u{1F34E}", "red apple"),
+    makeEntry("\u{1F34F}", "green apple"),
+    makeEntry("\u{1F431}", "cat face"),
+    makeEntry("\u{1F408}", "cat"),
+    makeEntry("\u{1F415}", "dog"),
+    makeEntry("\u{1F436}", "dog face"),
+    makeEntry("\u{2764}\u{FE0F}", "red heart"),
+    makeEntry("\u{1F499}", "blue heart"),
+    makeEntry("\u{1F49A}", "green heart"),
+    makeEntry("\u{1F49B}", "yellow heart"),
+  ];
+
+  it("should return first 10 entries for empty query", () => {
+    const results = searchEmoji(entries, "");
+    expect(results.length).toBe(10);
+    expect(results[0][1].name).toBe("grinning face");
+  });
+
+  it("should return first 10 entries for whitespace-only query", () => {
+    const results = searchEmoji(entries, "   ");
+    expect(results.length).toBe(10);
+  });
+
+  it("should rank exact matches highest", () => {
+    const results = searchEmoji(entries, "cat");
+    expect(results[0][1].name).toBe("cat");
+  });
+
+  it("should rank starts-with above contains", () => {
+    const results = searchEmoji(entries, "red");
+    expect(results[0][1].name).toBe("red apple");
+    expect(results[1][1].name).toBe("red heart");
+  });
+
+  it("should find contains matches", () => {
+    const results = searchEmoji(entries, "apple");
+    expect(results.length).toBe(2);
+    expect(results.map((r) => r[1].name)).toContain("red apple");
+    expect(results.map((r) => r[1].name)).toContain("green apple");
+  });
+
+  it("should be case-insensitive", () => {
+    const results = searchEmoji(entries, "CAT");
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0][1].name).toBe("cat");
+  });
+
+  it("should support multi-word matching", () => {
+    const results = searchEmoji(entries, "face grinning");
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0][1].name).toContain("grinning");
+    expect(results[0][1].name).toContain("face");
+  });
+
+  it("should return empty array for no matches", () => {
+    const results = searchEmoji(entries, "zzzzzzz");
+    expect(results).toEqual([]);
+  });
+
+  it("should return at most 10 results", () => {
+    const manyEntries = Array.from({ length: 50 }, (_, i) =>
+      makeEntry(`E${i}`, `heart variant ${i}`)
+    );
+    const results = searchEmoji(manyEntries, "heart");
+    expect(results.length).toBe(10);
+  });
+
+  it("should work with real emoji data", () => {
+    const emojiData: Record<string, EmojiEntry> = require("unicode-emoji-json");
+    const realEntries = Object.entries(emojiData) as Array<[string, EmojiEntry]>;
+
+    const results = searchEmoji(realEntries, "rocket");
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0][0]).toBe("\u{1F680}");
+  });
+});
+
+describe("getDirCompletions", () => {
+  const TEMP_DIR = path.join(__dirname, "../test-output/completions-test");
+
+  beforeAll(() => {
+    fs.mkdirSync(path.join(TEMP_DIR, "alpha"), { recursive: true });
+    fs.mkdirSync(path.join(TEMP_DIR, "alpha/nested"), { recursive: true });
+    fs.mkdirSync(path.join(TEMP_DIR, "bravo"), { recursive: true });
+    fs.mkdirSync(path.join(TEMP_DIR, "charlie"), { recursive: true });
+    fs.mkdirSync(path.join(TEMP_DIR, ".hidden"), { recursive: true });
+    fs.mkdirSync(path.join(TEMP_DIR, "node_modules"), { recursive: true });
+  });
+
+  afterAll(() => {
+    if (fs.existsSync(TEMP_DIR)) {
+      fs.rmSync(TEMP_DIR, { recursive: true });
+    }
+  });
+
+  it("should list directories for empty input from cwd", () => {
+    const originalCwd = process.cwd();
+    process.chdir(TEMP_DIR);
+    try {
+      const results = getDirCompletions("");
+      expect(results).toContain("./alpha");
+      expect(results).toContain("./bravo");
+      expect(results).toContain("./charlie");
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  it("should list directories for '.' input", () => {
+    const originalCwd = process.cwd();
+    process.chdir(TEMP_DIR);
+    try {
+      const results = getDirCompletions(".");
+      expect(results.length).toBeGreaterThan(0);
+      expect(results).toContain("./alpha");
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  it("should list directories for './' input", () => {
+    const originalCwd = process.cwd();
+    process.chdir(TEMP_DIR);
+    try {
+      const results = getDirCompletions("./");
+      expect(results).toContain("./alpha");
+      expect(results).toContain("./bravo");
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  it("should filter by prefix", () => {
+    const originalCwd = process.cwd();
+    process.chdir(TEMP_DIR);
+    try {
+      const results = getDirCompletions("./a");
+      expect(results).toEqual(["./alpha"]);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  it("should list subdirectories with trailing slash", () => {
+    const originalCwd = process.cwd();
+    process.chdir(TEMP_DIR);
+    try {
+      const results = getDirCompletions("./alpha/");
+      expect(results).toEqual(["./alpha/nested"]);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  it("should filter out hidden directories", () => {
+    const originalCwd = process.cwd();
+    process.chdir(TEMP_DIR);
+    try {
+      const results = getDirCompletions("");
+      const hidden = results.filter((r) => r.includes(".hidden"));
+      expect(hidden).toEqual([]);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  it("should filter out node_modules", () => {
+    const originalCwd = process.cwd();
+    process.chdir(TEMP_DIR);
+    try {
+      const results = getDirCompletions("");
+      const nm = results.filter((r) => r.includes("node_modules"));
+      expect(nm).toEqual([]);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  it("should return empty array for nonexistent path", () => {
+    const results = getDirCompletions("/nonexistent/path/xyz");
+    expect(results).toEqual([]);
+  });
+
+  it("should be case-insensitive when filtering", () => {
+    const originalCwd = process.cwd();
+    process.chdir(TEMP_DIR);
+    try {
+      const results = getDirCompletions("./A");
+      expect(results).toEqual(["./alpha"]);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  it("should return at most 5 results", () => {
+    const manyDirsBase = path.join(TEMP_DIR, "many");
+    for (let i = 0; i < 8; i++) {
+      fs.mkdirSync(path.join(manyDirsBase, `dir${i}`), { recursive: true });
+    }
+    const originalCwd = process.cwd();
+    process.chdir(TEMP_DIR);
+    try {
+      const results = getDirCompletions("./many/");
+      expect(results.length).toBe(5);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+});
+
+describe("CLI argument parsing", () => {
+  const CLI_PATH = path.join(__dirname, "../dist/index.js");
+
+  it("should show help with --help flag", () => {
+    const output = execSync(`node ${CLI_PATH} --help`, {
+      encoding: "utf8",
+    });
+    expect(output).toContain("emojico");
+    expect(output).toContain("Usage");
+    expect(output).toContain("--out");
+    expect(output).toContain("--all");
+  });
+
+  it("should show help with -h flag", () => {
+    const output = execSync(`node ${CLI_PATH} -h`, { encoding: "utf8" });
+    expect(output).toContain("Usage");
+  });
+
+  it("should accept -o as shorthand for --out", () => {
+    const outDir = path.join(__dirname, "../test-output/shorthand-test");
+    if (fs.existsSync(outDir)) fs.rmSync(outDir, { recursive: true });
+    execSync(`node ${CLI_PATH} \u{1F34E} -o ${outDir}`);
+    expect(fs.existsSync(path.join(outDir, "favicon.ico"))).toBe(true);
+    fs.rmSync(outDir, { recursive: true });
+  }, 30000);
+
+  it("should exit with error when no emoji in non-TTY mode", () => {
+    expect(() => {
+      execSync(`echo | node ${CLI_PATH}`, { encoding: "utf8" });
     }).toThrow();
   });
 });

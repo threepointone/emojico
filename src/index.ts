@@ -1,11 +1,18 @@
-#!/usr/bin/env node
-
 import * as fs from "fs";
 import * as path from "path";
 import { PNG } from "pngjs";
 
 // Import canvas library
 import { createCanvas, loadImage } from "@napi-rs/canvas";
+
+export interface EmojiEntry {
+  name: string;
+  slug: string;
+  group: string;
+  emoji_version: string;
+  unicode_version: string;
+  skin_tone_support: boolean;
+}
 
 const SIZES = {
   favicon: [16, 32, 48],
@@ -16,7 +23,9 @@ function printHelp() {
   console.log(`
 emojico - Convert emoji to favicon and Apple touch icon assets
 
-Usage: emojico <emoji> [--out <directory>] [--all]
+Usage: emojico [emoji] [--out <directory>] [--all]
+
+Run without an emoji argument to interactively search and pick one.
 
 Options:
   --out, -o <directory>  Output directory for the generated assets (default: current directory)
@@ -34,7 +43,7 @@ Example:
 function parseArgs() {
   const args = process.argv.slice(2);
 
-  if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
+  if (args.includes("--help") || args.includes("-h")) {
     printHelp();
   }
 
@@ -55,13 +64,403 @@ function parseArgs() {
     }
   }
 
-  if (!emoji) {
-    console.error("Error: Emoji is required");
-    console.error("Run with --help for usage information");
+  return { emoji, outDir, generateAll };
+}
+
+export function searchEmoji(
+  entries: Array<[string, EmojiEntry]>,
+  query: string
+): Array<[string, EmojiEntry]> {
+  if (!query.trim()) return entries.slice(0, 10);
+  const lower = query.toLowerCase();
+
+  const scored: Array<{ item: [string, EmojiEntry]; score: number }> = [];
+
+  for (const entry of entries) {
+    const name = entry[1].name.toLowerCase();
+    let score = 0;
+    if (name === lower) score = 3;
+    else if (name.startsWith(lower)) score = 2;
+    else if (name.includes(lower)) score = 1;
+    else {
+      const words = lower.split(/\s+/);
+      if (words.every((w) => name.includes(w))) score = 0.5;
+    }
+    if (score > 0) scored.push({ item: entry, score });
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, 10).map((s) => s.item);
+}
+
+function interactiveEmojiPicker(): Promise<string> {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const emojiData: Record<string, EmojiEntry> =
+    require("unicode-emoji-json");
+  const emojiEntries = Object.entries(emojiData) as Array<
+    [string, EmojiEntry]
+  >;
+
+  if (!process.stdin.isTTY) {
+    console.error("Interactive mode requires a terminal.");
     process.exit(1);
   }
 
-  return { emoji, outDir, generateAll };
+  return new Promise((resolve) => {
+    let query = "";
+    let selectedIndex = 0;
+    let results = searchEmoji(emojiEntries, "");
+    let prevLineCount = 0;
+
+    const stdout = process.stdout;
+    const stdin = process.stdin;
+
+    stdout.write("\x1b[?25l");
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding("utf8");
+
+    function cleanup() {
+      stdout.write("\x1b[?25h");
+      stdin.setRawMode(false);
+      stdin.pause();
+      stdin.removeAllListeners("data");
+    }
+
+    function render() {
+      if (prevLineCount > 0) {
+        stdout.write(`\x1b[${prevLineCount}A`);
+      }
+      stdout.write("\x1b[0J");
+
+      const lines: string[] = [];
+      lines.push(`  \x1b[1m🔍 Search:\x1b[0m ${query}\x1b[2m█\x1b[0m`);
+      lines.push("");
+
+      if (results.length === 0) {
+        lines.push("  No emoji found");
+      } else {
+        for (let i = 0; i < results.length; i++) {
+          const [emoji, entry] = results[i];
+          if (i === selectedIndex) {
+            lines.push(
+              `  \x1b[36m❯\x1b[0m ${emoji}  \x1b[1m${entry.name}\x1b[0m`
+            );
+          } else {
+            lines.push(`    ${emoji}  ${entry.name}`);
+          }
+        }
+      }
+
+      lines.push("");
+      lines.push(
+        "  \x1b[2m↑/↓ navigate · enter select · esc quit\x1b[0m"
+      );
+
+      stdout.write(lines.join("\n") + "\n");
+      prevLineCount = lines.length;
+    }
+
+    function onData(key: string) {
+      if (key === "\x03" || (key === "\x1b" && key.length === 1)) {
+        cleanup();
+        if (prevLineCount > 0) {
+          stdout.write(`\x1b[${prevLineCount}A\x1b[0J`);
+        }
+        console.log("Cancelled.");
+        process.exit(0);
+      }
+
+      if (key === "\r") {
+        if (results.length > 0 && selectedIndex < results.length) {
+          const [emoji, entry] = results[selectedIndex];
+          cleanup();
+          if (prevLineCount > 0) {
+            stdout.write(`\x1b[${prevLineCount}A\x1b[0J`);
+          }
+          console.log(`Selected: ${emoji}  ${entry.name}`);
+          resolve(emoji);
+          return;
+        }
+      }
+
+      if (key[0] === "\x1b" && key.length > 1) {
+        if (key === "\x1b[A") {
+          selectedIndex = Math.max(0, selectedIndex - 1);
+        } else if (key === "\x1b[B") {
+          selectedIndex = Math.min(results.length - 1, selectedIndex + 1);
+        }
+        render();
+        return;
+      }
+
+      if (key === "\x7f" || key === "\b") {
+        if (query.length > 0) {
+          query = query.slice(0, -1);
+          selectedIndex = 0;
+          results = searchEmoji(emojiEntries, query);
+          render();
+        }
+        return;
+      }
+
+      if (key >= " " && key <= "~") {
+        query += key;
+        selectedIndex = 0;
+        results = searchEmoji(emojiEntries, query);
+        render();
+        return;
+      }
+    }
+
+    stdin.on("data", onData);
+    render();
+  });
+}
+
+export function getDirCompletions(input: string): string[] {
+  let searchDir: string;
+  let prefix: string;
+
+  if (!input || input === "." || input === "./") {
+    searchDir = ".";
+    prefix = "";
+  } else if (input.endsWith("/")) {
+    searchDir = input.slice(0, -1);
+    prefix = "";
+  } else {
+    searchDir = path.dirname(input);
+    prefix = path.basename(input).toLowerCase();
+  }
+
+  try {
+    const entries = fs.readdirSync(searchDir, { withFileTypes: true });
+    return entries
+      .filter(
+        (e) =>
+          e.isDirectory() &&
+          !e.name.startsWith(".") &&
+          e.name !== "node_modules" &&
+          (!prefix || e.name.toLowerCase().startsWith(prefix))
+      )
+      .map((e) => (searchDir === "." ? "./" + e.name : searchDir + "/" + e.name))
+      .slice(0, 5);
+  } catch {
+    return [];
+  }
+}
+
+function interactiveFolderPrompt(): Promise<string> {
+  return new Promise((resolve) => {
+    let value = ".";
+    let completions = getDirCompletions(value);
+    let selectedCompletion = 0;
+    let prevLineCount = 0;
+
+    const stdout = process.stdout;
+    const stdin = process.stdin;
+
+    stdout.write("\x1b[?25l");
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding("utf8");
+
+    function cleanup() {
+      stdout.write("\x1b[?25h");
+      stdin.setRawMode(false);
+      stdin.pause();
+      stdin.removeAllListeners("data");
+    }
+
+    function render() {
+      if (prevLineCount > 0) {
+        stdout.write(`\x1b[${prevLineCount}A`);
+      }
+      stdout.write("\x1b[0J");
+
+      const lines: string[] = [];
+      lines.push(
+        `  \x1b[1m\u{1F4C1} Output folder:\x1b[0m ${value}\x1b[2m\u2588\x1b[0m`
+      );
+      lines.push("");
+
+      if (completions.length > 0) {
+        for (let i = 0; i < completions.length; i++) {
+          if (i === selectedCompletion) {
+            lines.push(
+              `  \x1b[36m\u276f\x1b[0m \x1b[1m${completions[i]}\x1b[0m`
+            );
+          } else {
+            lines.push(`    ${completions[i]}`);
+          }
+        }
+      }
+
+      lines.push("");
+      lines.push(
+        "  \x1b[2mtab complete \u00b7 \u2191/\u2193 navigate \u00b7 enter confirm \u00b7 esc quit\x1b[0m"
+      );
+
+      stdout.write(lines.join("\n") + "\n");
+      prevLineCount = lines.length;
+    }
+
+    function onData(key: string) {
+      if (key === "\x03" || (key === "\x1b" && key.length === 1)) {
+        cleanup();
+        if (prevLineCount > 0) {
+          stdout.write(`\x1b[${prevLineCount}A\x1b[0J`);
+        }
+        console.log("Cancelled.");
+        process.exit(0);
+      }
+
+      if (key === "\t") {
+        if (completions.length > 0 && selectedCompletion < completions.length) {
+          value = completions[selectedCompletion] + "/";
+          completions = getDirCompletions(value);
+          selectedCompletion = 0;
+          render();
+        }
+        return;
+      }
+
+      if (key === "\r") {
+        const finalValue = value.replace(/\/+$/, "") || ".";
+        cleanup();
+        if (prevLineCount > 0) {
+          stdout.write(`\x1b[${prevLineCount}A\x1b[0J`);
+        }
+        console.log(`  \u{1F4C1} Output folder: ${finalValue}`);
+        resolve(finalValue);
+        return;
+      }
+
+      if (key[0] === "\x1b" && key.length > 1) {
+        if (key === "\x1b[A") {
+          selectedCompletion = Math.max(0, selectedCompletion - 1);
+        } else if (key === "\x1b[B") {
+          selectedCompletion = Math.min(
+            completions.length - 1,
+            selectedCompletion + 1
+          );
+        }
+        render();
+        return;
+      }
+
+      if (key === "\x7f" || key === "\b") {
+        if (value.length > 0) {
+          value = value.slice(0, -1);
+          selectedCompletion = 0;
+          completions = getDirCompletions(value);
+          render();
+        }
+        return;
+      }
+
+      if (key >= " " && key <= "~") {
+        value += key;
+        selectedCompletion = 0;
+        completions = getDirCompletions(value);
+        render();
+        return;
+      }
+    }
+
+    stdin.on("data", onData);
+    render();
+  });
+}
+
+function interactiveAllToggle(): Promise<boolean> {
+  return new Promise((resolve) => {
+    let selected = false;
+    let prevLineCount = 0;
+
+    const stdout = process.stdout;
+    const stdin = process.stdin;
+
+    stdout.write("\x1b[?25l");
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding("utf8");
+
+    function cleanup() {
+      stdout.write("\x1b[?25h");
+      stdin.setRawMode(false);
+      stdin.pause();
+      stdin.removeAllListeners("data");
+    }
+
+    function render() {
+      if (prevLineCount > 0) {
+        stdout.write(`\x1b[${prevLineCount}A`);
+      }
+      stdout.write("\x1b[0J");
+
+      const lines: string[] = [];
+      lines.push(`  \x1b[1m\u{1F4E6} Generate all assets?\x1b[0m`);
+      lines.push("");
+
+      if (!selected) {
+        lines.push(
+          `  \x1b[36m\u276f\x1b[0m \x1b[1mfavicon.ico only\x1b[0m`
+        );
+        lines.push(
+          `    All assets (favicons, Apple touch icons, og:image)`
+        );
+      } else {
+        lines.push(`    favicon.ico only`);
+        lines.push(
+          `  \x1b[36m\u276f\x1b[0m \x1b[1mAll assets (favicons, Apple touch icons, og:image)\x1b[0m`
+        );
+      }
+
+      lines.push("");
+      lines.push(
+        "  \x1b[2m\u2191/\u2193 toggle \u00b7 enter confirm \u00b7 esc quit\x1b[0m"
+      );
+
+      stdout.write(lines.join("\n") + "\n");
+      prevLineCount = lines.length;
+    }
+
+    function onData(key: string) {
+      if (key === "\x03" || (key === "\x1b" && key.length === 1)) {
+        cleanup();
+        if (prevLineCount > 0) {
+          stdout.write(`\x1b[${prevLineCount}A\x1b[0J`);
+        }
+        console.log("Cancelled.");
+        process.exit(0);
+      }
+
+      if (key === "\r") {
+        cleanup();
+        if (prevLineCount > 0) {
+          stdout.write(`\x1b[${prevLineCount}A\x1b[0J`);
+        }
+        const label = selected
+          ? "All assets"
+          : "favicon.ico only";
+        console.log(`  \u{1F4E6} ${label}`);
+        resolve(selected);
+        return;
+      }
+
+      if (key[0] === "\x1b" && key.length > 1) {
+        if (key === "\x1b[A" || key === "\x1b[B") {
+          selected = !selected;
+        }
+        render();
+        return;
+      }
+    }
+
+    stdin.on("data", onData);
+    render();
+  });
 }
 
 /**
@@ -426,7 +825,18 @@ Add this to your HTML <head> section:
 // Parse arguments and run (only if this file is executed directly, not imported)
 if (require.main === module) {
   const { emoji, outDir, generateAll } = parseArgs();
-  generateFavicons(emoji, outDir, generateAll).catch((error) => {
+
+  (async () => {
+    if (emoji) {
+      await generateFavicons(emoji, outDir, generateAll);
+    } else {
+      const selectedEmoji = await interactiveEmojiPicker();
+      const selectedFolder = await interactiveFolderPrompt();
+      const selectedAll = await interactiveAllToggle();
+      console.log("");
+      await generateFavicons(selectedEmoji, selectedFolder, selectedAll);
+    }
+  })().catch((error) => {
     console.error("Error:", error.message);
     process.exit(1);
   });
